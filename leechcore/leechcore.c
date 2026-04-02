@@ -467,7 +467,7 @@ EXPORTED_FUNCTION HANDLE LcCreateEx(_Inout_ PLC_CONFIG pLcCreateConfig, _Out_opt
     if(!ctxLC->Config.fRemote) {
         LcCreate_MemMapInitAddressDetect(ctxLC);
         ctxLC->Config.paMax = LcMemMap_GetMaxAddress(ctxLC);
-        ctxLC->Config.fWritable = (ctxLC->pfnWriteScatter != NULL) || (ctxLC->pfnWriteContigious != NULL);
+        ctxLC->Config.fWritable = FALSE;
     }
     ctxLC->CallStat.dwVersion = LC_STATISTICS_VERSION;
     QueryPerformanceFrequency((PLARGE_INTEGER)&ctxLC->CallStat.qwFreq);
@@ -953,35 +953,7 @@ VOID LcWriteScatter_GatherContigious(_In_ PLC_CONTEXT ctxLC, _In_ DWORD cMEMs, _
 */
 EXPORTED_FUNCTION VOID LcWriteScatter(_In_ HANDLE hLC, _In_ DWORD cMEMs, _Inout_ PPMEM_SCATTER ppMEMs)
 {
-    PLC_CONTEXT ctxLC = (PLC_CONTEXT)hLC;
-    QWORD i, tmStart = LcCallStart();
-    if(!ctxLC || ctxLC->version != LC_CONTEXT_VERSION) { return; }
-    if(!ctxLC->pfnWriteScatter && !ctxLC->pfnWriteContigious) { return; }
-    if(!cMEMs) { return; }
-    if(ctxLC->Config.fRemote && ctxLC->pfnWriteScatter) {
-        // REMOTE
-        ctxLC->pfnWriteScatter(ctxLC, cMEMs, ppMEMs);
-    } else {
-        // LOCAL LEECHCORE
-        // 1: TRANSLATE
-        for(i = 0; i < cMEMs; i++) {
-            MEM_SCATTER_STACK_PUSH(ppMEMs[i], ppMEMs[i]->qwA);
-        }
-        LcMemMap_TranslateMEMs(ctxLC, cMEMs, ppMEMs);
-        // 2: FETCH
-        LcLockAcquire(ctxLC);
-        if(ctxLC->pfnWriteScatter) {
-            ctxLC->pfnWriteScatter(ctxLC, cMEMs, ppMEMs);
-        } else {
-            LcWriteScatter_GatherContigious(ctxLC, cMEMs, ppMEMs);
-        }
-        LcLockRelease(ctxLC);
-        // 3: RESTORE
-        for(i = 0; i < cMEMs; i++) {
-            ppMEMs[i]->qwA = MEM_SCATTER_STACK_POP(ppMEMs[i]);
-        }
-    }
-    LcCallEnd(ctxLC, LC_STATISTICS_ID_WRITESCATTER, tmStart);
+    return;
 }
 
 /*
@@ -995,42 +967,7 @@ EXPORTED_FUNCTION VOID LcWriteScatter(_In_ HANDLE hLC, _In_ DWORD cMEMs, _Inout_
 _Success_(return)
 EXPORTED_FUNCTION BOOL LcWrite(_In_ HANDLE hLC, _In_ QWORD pa, _In_ DWORD cb, _In_reads_(cb) PBYTE pb)
 {
-    BOOL fResult = FALSE;
-    PBYTE pbBuffer = NULL;
-    DWORD i = 0, oA = 0, cbP, cMEMs;
-    PMEM_SCATTER pMEM, pMEMs, *ppMEMs;
-    PLC_CONTEXT ctxLC = (PLC_CONTEXT)hLC;
-    QWORD tmStart = LcCallStart();
-    if(!ctxLC || ctxLC->version != LC_CONTEXT_VERSION) { goto fail; }
-    // allocate
-    cMEMs = (DWORD)(((pa & 0xfff) + cb + 0xfff) >> 12);
-    if(!(pbBuffer = (PBYTE)LocalAlloc(LMEM_ZEROINIT, cMEMs * (sizeof(MEM_SCATTER) + sizeof(PMEM_SCATTER))))) { goto fail; }
-    pMEMs = (PMEM_SCATTER)pbBuffer;
-    ppMEMs = (PPMEM_SCATTER)(pbBuffer + cMEMs * sizeof(MEM_SCATTER));
-    // prepare pages
-    while(oA < cb) {
-        cbP = 0x1000 - ((pa + oA) & 0xfff);
-        cbP = min(cbP, cb - oA);
-        ppMEMs[i] = pMEM = pMEMs + i;
-        pMEM->version = MEM_SCATTER_VERSION;
-        pMEM->qwA = pa + oA;
-        pMEM->cb = cbP;
-        pMEM->pb = pb + oA;
-        oA += cbP;
-        i++;
-    }
-    // write and verify result
-    LcWriteScatter(hLC, cMEMs, ppMEMs);
-    for(i = 0; i < cMEMs; i++) {
-        if(!ppMEMs[i]->f) {
-            break;
-        }
-    }
-    fResult = TRUE;
-fail:
-    LocalFree(pbBuffer);
-    LcCallEnd(ctxLC, LC_STATISTICS_ID_WRITE, tmStart);
-    return fResult;
+    return FALSE;
 }
 
 
